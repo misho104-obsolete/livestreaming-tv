@@ -113,6 +113,8 @@
       programme.stopObj = stop;
       channels[programme.channel].programmes.push(programme);
     });
+    splittedChannelsMerge(channels);
+
     Object.keys(channels).forEach(function(channelId) {
       var programmes = channels[channelId].programmes;
       // head padding : Note that programmes.length is always non-zero.
@@ -138,6 +140,51 @@
     timetable.appendChild(generateTable(channels, now, actualLastDate));
     getCurrentChannel();
     setTimeout(updateProgrammes, calculateReloadInterval(channels));
+  }
+
+  function splittedChannelsMerge(channels) {
+    // merge channels with same remoconNumber if programmes have no overlap.
+    // This algorithm is not perfect (but does work to some extent) if 4 or more channels have the same reomconNumber.
+    var channelIds = Object.keys(channels);
+    var i, j, len = channelIds.length;
+    for (i = 0; i < len - 1; i++) {
+      for (j = i + 1; j < len; j++) {
+        if (channels[channelIds[i]].remoconNumber == channels[channelIds[j]].remoconNumber) {
+          var merged = splittedChannelsTryToMerge(channels[channelIds[i]], channels[channelIds[j]]);
+          if (merged) {
+            delete channels[channelIds[j]];
+            channelIds.splice(j, 1);
+            j--;
+            len--;
+          }
+        }
+      }
+    }
+  }
+
+  function splittedChannelsTryToMerge(c1, c2) {
+    // if possible, merge c2 into c1, and c1 is updated.
+    // return whether merged or not.
+    var merged = [], toMerge = c2.programmes;
+    c1.programmes.forEach(function(programme) {
+      merged.push(programme);
+    });
+    var i = 0, j = 0, len = toMerge.length;
+    while (j < len) {
+      // try to insert toMerge[j] before merged[i].
+      if (i >= merged.length) {
+        merged.push(toMerge[j++]);
+      } else if (toMerge[j].startObj > merged[i].startObj) {
+        i++;
+      } else {
+        if (toMerge[j].stopObj > merged[i].startObj) {
+          return false;
+        }
+        merged.splice(i, 0, toMerge[j++])
+      }
+    }
+    c1.programmes = merged;
+    return true;
   }
 
   function calculateReloadInterval(channels) {
